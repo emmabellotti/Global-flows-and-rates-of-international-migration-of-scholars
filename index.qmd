@@ -1,0 +1,93 @@
+---
+title: "Untitled"
+format: html
+---
+
+```{r}
+library("tidyverse")
+library("shiny")
+library("ggplot2")
+library("sf")
+library("spData")
+library("countrycode")
+library("flowmapblue")
+library("flowmapper")
+```
+
+
+```{r}
+file <- read.csv("data_processed/openalex_2024_V1_scholarlymigration_countryflows_enriched.csv")
+```
+
+
+```{r}
+Africa <- file |> filter(regionfrom == "Sub-Saharan Africa ",
+regionto == "Middle East & North Africa")
+```
+
+```{r}
+Africa2019 <- Africa |> filter(year == 2014)
+```
+
+```{r}
+#ggplot(Africa2019, aes(x = countryname,  y = netmigrationrate))+
+ #   geom_point()
+```
+
+```{r}
+countries <- spData::world
+glimpse(countries)
+```
+
+```{r}
+countries |> 
+  ggplot() +
+  geom_sf()
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = countries) +
+  geom_sf(data = st_point_on_surface(countries), color = "darkred")
+```
+
+```{r}
+countries_centroids <- countries |> 
+  st_centroid() |> # finds a center of each country'spolygon
+  st_coordinates() |>  # extracts numeric coorindates from the POINT geometry
+  as.data.frame() |> # converts the matrix to a data.frame 
+  setNames(c("lon", "lat")) |> # renames the columns
+  cbind(countries) |> # adds back all the columns (except for geometry) form `countries`
+  select(iso_a2, lon, lat, name_long) # only selects a few columns that we really need
+
+glimpse(countries_centroids)
+```
+
+```{r}
+library(countrycode)
+
+scopus_Africa2019_flows <- Africa2019 |> 
+  mutate(
+    iso2codefrom = countrycode(iso3codefrom,
+      origin = "iso3c",
+      destination = "iso2c"),
+    iso2codeto = countrycode(iso3codeto,
+      origin = "iso3c",
+      destination = "iso2c")
+  )
+```
+
+```{r}
+locations <- countries_centroids |> rename(id = iso_a2, name = name_long)
+flows <- scopus_Africa2019_flows |> select(origin = iso2codefrom, dest = iso2codeto, count = n_migrations)
+```
+
+```{r}
+flowmap <- flowmapblue(locations = locations, flows = flows)
+```
+
+```{r}
+htmlwidgets::saveWidget(flowmap, "flowmap.html")
+library(shiny)
+shiny::tags$iframe(src = "flowmap.html", width = "100%", height = "600px")
+```
